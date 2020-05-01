@@ -32,6 +32,7 @@
  */
 
 #include <ofi_atomic.h>
+#include "efa.h"
 #include "rxr.h"
 #include "rxr_rma.h"
 #include "rxr_cntr.h"
@@ -112,7 +113,7 @@ ssize_t rxr_atomic_generic_efa(struct rxr_ep *rxr_ep,
 {
 	struct rxr_tx_entry *tx_entry;
 	struct rxr_peer *peer;
-	ssize_t err;
+	ssize_t delivery_complete_requested_flag, err;
 	static int req_pkt_type_list[] = {
 		[ofi_op_atomic] = RXR_WRITE_RTA_PKT,
 		[ofi_op_atomic_fetch] = RXR_FETCH_RTA_PKT,
@@ -137,12 +138,26 @@ ssize_t rxr_atomic_generic_efa(struct rxr_ep *rxr_ep,
 		goto out;
 	}
 
+	delivery_complete_requested_flag = rxr_ep->util_ep.tx_op_flags & FI_DELIVERY_COMPLETE;
+	delivery_complete_requested_flag = 1;
+	if (delivery_complete_requested_flag &&
+	    peer->flags & RXR_PEER_HANDSHAKE_RECEIVED &&
+	    !rxr_peer_support_delivery_complete(peer) &&
+	    tx_entry->cq_entry.flags & FI_SELECTIVE_COMPLETION)
+		return -FI_EOPNOTSUPP;
+
 	tx_entry->msg_id = (peer->next_msg_id != ~0) ?
 			    peer->next_msg_id++ : ++peer->next_msg_id;
 
-	err = rxr_pkt_post_ctrl_or_queue(rxr_ep, RXR_TX_ENTRY,
-					tx_entry, req_pkt_type_list[op],
-					0);
+	if (delivery_complete_requested_flag && op == ofi_op_atomic) {
+		err = rxr_pkt_post_ctrl_or_queue(rxr_ep, RXR_TX_ENTRY,
+						 tx_entry, RXR_DC_WRITE_RTA_PKT,
+						 0);
+	} else {
+		err = rxr_pkt_post_ctrl_or_queue(rxr_ep, RXR_TX_ENTRY,
+						 tx_entry, req_pkt_type_list[op],
+						 0);
+	}
 
 	if (OFI_UNLIKELY(err)) {
 		rxr_release_tx_entry(rxr_ep, tx_entry);

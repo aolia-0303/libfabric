@@ -234,7 +234,16 @@ void rxr_pkt_handle_data_send_completion(struct rxr_ep *ep,
 	tx_entry->bytes_acked +=
 		rxr_get_data_pkt(pkt_entry->pkt)->hdr.seg_size;
 
-	if (tx_entry->total_len == tx_entry->bytes_acked)
+	/*
+	 * Two things we need to pay attention here if FI_DELIVERY_COMPLETE is specified by the user:
+	 * 1. If the long messages protocols were used,
+	 * we shall release it in rxr_pkt_handle_receipt_recv instead of releasing it here.
+	 * 2. If the read messages protocols were used,
+	 * we shall release the tx_entry here even if FI_DELIVERY_COMPLETE is specified by user.
+	 */
+	if (tx_entry->total_len == tx_entry->bytes_acked &&
+	    (tx_entry->cq_entry.flags & FI_READ ||
+	    (!(ep->util_ep.tx_op_flags & FI_DELIVERY_COMPLETE))))
 		rxr_cq_handle_tx_completion(ep, tx_entry);
 }
 
@@ -250,6 +259,7 @@ int rxr_pkt_proc_data(struct rxr_ep *ep,
 	struct rxr_peer *peer;
 	struct efa_mr *desc;
 	int64_t bytes_left, bytes_copied;
+	struct rxr_rx_entry *response_rx_entry;
 	ssize_t ret = 0;
 
 #if ENABLE_DEBUG
@@ -298,11 +308,22 @@ int rxr_pkt_proc_data(struct rxr_ep *ep,
 		dlist_remove(&rx_entry->rx_pending_entry);
 		ep->rx_pending--;
 #endif
-		rxr_cq_handle_rx_completion(ep, pkt_entry, rx_entry);
 
+		/* Send a delivery confirmation packet if long message protocols are used */
+		if (ep->util_ep.tx_op_flags & FI_DELIVERY_COMPLETE &&
+		    pkt_type == RXR_DATA_PKT &&
+		    !(rxr_get_base_hdr(pkt_entry->pkt)->flags & RXR_DATA_READ)) {
+			response_rx_entry = rxr_pkt_alloc_dc_rx_entry(ep, pkt_entry);
+			response_rx_entry->tx_id = rx_entry->tx_id;
+			response_rx_entry->addr = rx_entry->addr;
+			ret = rxr_pkt_post_ctrl(ep, RXR_RX_ENTRY,
+                               response_rx_entry, RXR_RECEIPT_PKT, 0);
+		}
+
+		rxr_cq_handle_rx_completion(ep, pkt_entry, rx_entry);
 		rxr_msg_multi_recv_free_posted_entry(ep, rx_entry);
 		rxr_release_rx_entry(ep, rx_entry);
-		return 0;
+		return ret;
 	}
 
 	if (!rx_entry->window) {

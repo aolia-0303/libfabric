@@ -68,6 +68,9 @@ ssize_t rxr_msg_post_rtm(struct rxr_ep *rxr_ep, struct rxr_tx_entry *tx_entry)
 	assert(RXR_READ_MSGRTM_PKT + 1 == RXR_READ_TAGRTM_PKT);
 	assert(RXR_LONG_MSGRTM_PKT + 1 == RXR_LONG_TAGRTM_PKT);
 	assert(RXR_MEDIUM_MSGRTM_PKT + 1 == RXR_MEDIUM_TAGRTM_PKT);
+	assert(RXR_DC_EAGER_MSGRTM_PKT + 1 == RXR_DC_EAGER_TAGRTM_PKT);
+	assert(RXR_DC_MEDIUM_MSGRTM_PKT + 1 == RXR_DC_MEDIUM_TAGRTM_PKT);
+	assert(RXR_DC_LONG_MSGRTM_PKT + 1 == RXR_DC_LONG_TAGRTM_PKT);
 
 	assert(RXR_DC_EAGER_MSGRTM_PKT + 1 == RXR_DC_EAGER_TAGRTM_PKT);
 	assert(RXR_DC_MEDIUM_MSGRTM_PKT + 1 == RXR_DC_MEDIUM_TAGRTM_PKT);
@@ -88,6 +91,7 @@ ssize_t rxr_msg_post_rtm(struct rxr_ep *rxr_ep, struct rxr_tx_entry *tx_entry)
 						      RXR_EAGER_MSGRTM_PKT + tagged);
 
 	delivery_complete_requested_flag = rxr_ep->util_ep.tx_op_flags & FI_DELIVERY_COMPLETE;
+	delivery_complete_requested_flag = 1;
 	peer = rxr_ep_get_peer(rxr_ep, tx_entry->addr);
 
 	if (peer->is_local) {
@@ -148,8 +152,11 @@ ssize_t rxr_msg_post_rtm(struct rxr_ep *rxr_ep, struct rxr_tx_entry *tx_entry)
 	if (OFI_UNLIKELY(err))
 		return err;
 
+	ctrl_type = delivery_complete_requested_flag ? RXR_DC_LONG_MSGRTM_PKT : RXR_LONG_MSGRTM_PKT;
+	ctrl_type += tagged;
+
 	return rxr_pkt_post_ctrl_or_queue(rxr_ep, RXR_TX_ENTRY, tx_entry,
-					  RXR_LONG_MSGRTM_PKT + tagged, 0);
+					  ctrl_type, 0);
 }
 
 ssize_t rxr_msg_generic_send(struct fid_ep *ep, const struct fi_msg *msg,
