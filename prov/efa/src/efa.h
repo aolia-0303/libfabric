@@ -346,6 +346,7 @@ void efa_device_free(void);
 
 struct efa_context **efa_device_get_context_list(int *num_ctx);
 void efa_device_free_context_list(struct efa_context **list);
+void free_send_wr_list(struct ibv_send_wr *head);
 
 const struct fi_info *efa_get_efa_info(const char *domain_name);
 int efa_domain_open(struct fid_fabric *fabric_fid, struct fi_info *info,
@@ -381,6 +382,15 @@ bool efa_ep_support_rdma_read(struct fid_ep *ep_fid)
 
 	efa_ep = container_of(ep_fid, struct efa_ep, util_ep.ep_fid);
 	return efa_ep->domain->ctx->device_caps & EFADV_DEVICE_ATTR_CAPS_RDMA_READ;
+}
+
+static inline
+bool efa_ep_support_rnr_retry_modify(struct fid_ep *ep_fid)
+{
+	struct efa_ep *efa_ep;
+
+	efa_ep = container_of(ep_fid, struct efa_ep, util_ep.ep_fid);
+	return efa_ep->domain->ctx->device_caps & EFADV_DEVICE_ATTR_CAPS_RNR_RETRY;
 }
 
 static inline

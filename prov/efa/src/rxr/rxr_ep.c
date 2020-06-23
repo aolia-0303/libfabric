@@ -1426,9 +1426,13 @@ static inline void rxr_ep_poll_cq(struct rxr_ep *ep,
 
 void rxr_ep_progress_internal(struct rxr_ep *ep)
 {
+	struct ibv_send_wr *bad_wr;
+	struct efa_ep *efa_ep;
+	struct efa_qp *qp;
 	struct rxr_rx_entry *rx_entry;
 	struct rxr_tx_entry *tx_entry;
 	struct rxr_read_entry *read_entry;
+	struct rxr_peer *peer;
 	struct dlist_entry *tmp;
 	ssize_t ret;
 
@@ -1505,6 +1509,7 @@ void rxr_ep_progress_internal(struct rxr_ep *ep)
 	 */
 	dlist_foreach_container(&ep->tx_pending_list, struct rxr_tx_entry,
 				tx_entry, entry) {
+		peer = rxr_ep_get_peer(ep, tx_entry->addr);
 		if (tx_entry->window > 0)
 			tx_entry->send_flags |= FI_MORE;
 		else
@@ -1520,6 +1525,21 @@ void rxr_ep_progress_internal(struct rxr_ep *ep)
 			 */
 			if (ep->tx_pending == ep->max_outstanding_tx)
 				goto out;
+
+			if (peer->flags & RXR_PEER_IN_BACKOFF) {
+				break;
+				/*
+				efa_ep = container_of(ep->rdm_ep, struct efa_ep, util_ep.ep_fid);
+				if (!peer->is_local && efa_ep->xmit_more_wr_tail != &efa_ep->xmit_more_wr_head) {
+					qp = efa_ep->qp;
+					ibv_post_send(qp->ibv_qp, efa_ep->xmit_more_wr_head.next, &bad_wr);
+					free_send_wr_list(efa_ep->xmit_more_wr_head.next);
+					efa_ep->xmit_more_wr_tail = &efa_ep->xmit_more_wr_head;
+				}
+				goto out;
+				*/
+			}
+
 			ret = rxr_pkt_post_data(ep, tx_entry);
 			if (OFI_UNLIKELY(ret)) {
 				tx_entry->send_flags &= ~FI_MORE;
@@ -1551,6 +1571,14 @@ void rxr_ep_progress_internal(struct rxr_ep *ep)
 	}
 
 out:
+	efa_ep = container_of(ep->rdm_ep, struct efa_ep, util_ep.ep_fid);
+
+	if (efa_ep->xmit_more_wr_tail != &efa_ep->xmit_more_wr_head) {
+		qp = efa_ep->qp;
+		ibv_post_send(qp->ibv_qp, efa_ep->xmit_more_wr_head.next, &bad_wr);
+		free_send_wr_list(efa_ep->xmit_more_wr_head.next);
+		efa_ep->xmit_more_wr_tail = &efa_ep->xmit_more_wr_head;
+	}
 	return;
 rx_err:
 	if (rxr_cq_handle_rx_error(ep, rx_entry, ret))

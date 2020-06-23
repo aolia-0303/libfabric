@@ -76,7 +76,7 @@ static inline void dump_msg(const struct fi_msg *msg, const char *context)
 }
 #endif /* EFA_MSG_DUMP */
 
-static void free_send_wr_list(struct ibv_send_wr *head)
+void free_send_wr_list(struct ibv_send_wr *head)
 {
 	struct ibv_send_wr *wr = head;
 	struct ibv_send_wr *tmp;
