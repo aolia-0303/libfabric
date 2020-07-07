@@ -385,15 +385,27 @@ ssize_t rxr_rma_post_write(struct rxr_ep *ep, struct rxr_tx_entry *tx_entry)
 {
 	ssize_t err;
 	struct rxr_peer *peer;
+	ssize_t delivery_complete_requested_flag;
+	int ctrl_type;
 
 	peer = rxr_ep_get_peer(ep, tx_entry->addr);
 	assert(peer);
 	if (peer->is_local)
 		return rxr_rma_post_shm_write(ep, tx_entry);
 
+	delivery_complete_requested_flag = ep->util_ep.tx_op_flags & FI_DELIVERY_COMPLETE;
+
+	if (delivery_complete_requested_flag &&
+	    peer->flags & RXR_PEER_HANDSHAKE_RECEIVED &&
+	    !rxr_peer_support_delivery_complete(peer) &&
+	    tx_entry->cq_entry.flags & FI_SELECTIVE_COMPLETION)
+		return -FI_EOPNOTSUPP;
+
 	/* Inter instance */
-	if (tx_entry->total_len < rxr_pkt_req_max_data_size(ep, tx_entry->addr, RXR_EAGER_RTW_PKT))
-		return rxr_pkt_post_ctrl_or_queue(ep, RXR_TX_ENTRY, tx_entry, RXR_EAGER_RTW_PKT, 0);
+	if (tx_entry->total_len < rxr_pkt_req_max_data_size(ep, tx_entry->addr, RXR_EAGER_RTW_PKT)) {
+		ctrl_type = (delivery_complete_requested_flag && rxr_peer_support_delivery_complete(peer)) ? RXR_DC_EAGER_RTW_PKT : RXR_EAGER_RTW_PKT;
+		return rxr_pkt_post_ctrl_or_queue(ep, RXR_TX_ENTRY, tx_entry, ctrl_type, 0);
+	}
 
 	if (tx_entry->total_len >= rxr_env.efa_min_read_write_size &&
 	    efa_both_support_rdma_read(ep, peer) &&

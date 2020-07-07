@@ -94,7 +94,8 @@
 
 #define RXR_DC_EAGER_MSGRTM_PKT 	132
 #define RXR_DC_EAGER_TAGRTM_PKT 	133
-#define RXR_EXTRA_REQ_PKT_END		134
+#define RXR_DC_EAGER_RTW_PKT    	134
+#define RXR_EXTRA_REQ_PKT_END   	135
 
 /*
  *  Packet fields common to all rxr packets. The other packet headers below must
