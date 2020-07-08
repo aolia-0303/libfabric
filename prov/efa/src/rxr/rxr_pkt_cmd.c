@@ -177,6 +177,12 @@ int rxr_pkt_init_ctrl(struct rxr_ep *rxr_ep, int entry_type, void *x_entry,
 	case RXR_DC_EAGER_TAGRTM_PKT:
 		ret = rxr_pkt_init_dc_eager_tagrtm(rxr_ep, (struct rxr_tx_entry *)x_entry, pkt_entry);
 		break;
+	case RXR_DC_MEDIUM_MSGRTM_PKT:
+		ret = rxr_pkt_init_dc_medium_msgrtm(rxr_ep, (struct rxr_tx_entry *)x_entry, pkt_entry);
+		break;
+	case RXR_DC_MEDIUM_TAGRTM_PKT:
+		ret = rxr_pkt_init_dc_medium_tagrtm(rxr_ep, (struct rxr_tx_entry *)x_entry, pkt_entry);
+		break;
 	case RXR_DC_EAGER_RTW_PKT:
 		ret = rxr_pkt_init_dc_eager_rtw(rxr_ep, (struct rxr_tx_entry *)x_entry, pkt_entry);
 		break;
@@ -219,6 +225,8 @@ void rxr_pkt_handle_ctrl_sent(struct rxr_ep *rxr_ep, struct rxr_pkt_entry *pkt_e
 		break;
 	case RXR_MEDIUM_MSGRTM_PKT:
 	case RXR_MEDIUM_TAGRTM_PKT:
+	case RXR_DC_MEDIUM_MSGRTM_PKT:
+	case RXR_DC_MEDIUM_TAGRTM_PKT:
 		rxr_pkt_handle_medium_rtm_sent(rxr_ep, pkt_entry);
 		break;
 	case RXR_LONG_MSGRTM_PKT:
@@ -333,7 +341,10 @@ ssize_t rxr_pkt_post_ctrl(struct rxr_ep *ep, int entry_type, void *x_entry,
 	ssize_t err;
 	struct rxr_tx_entry *tx_entry;
 
-	if (ctrl_type == RXR_MEDIUM_TAGRTM_PKT || ctrl_type == RXR_MEDIUM_MSGRTM_PKT) {
+	if (ctrl_type == RXR_MEDIUM_TAGRTM_PKT ||
+	    ctrl_type == RXR_MEDIUM_MSGRTM_PKT ||
+	    ctrl_type == RXR_DC_MEDIUM_MSGRTM_PKT ||
+	    ctrl_type == RXR_DC_MEDIUM_TAGRTM_PKT) {
 		assert(entry_type == RXR_TX_ENTRY);
 		assert(!inject);
 
@@ -456,6 +467,12 @@ void rxr_pkt_handle_send_completion(struct rxr_ep *ep, struct fi_cq_data_entry *
 		/* no action to be taken here */
 		break;
 	case RXR_DC_EAGER_TAGRTM_PKT:
+		/* no action to be taken here */
+		break;
+	case RXR_DC_MEDIUM_MSGRTM_PKT:
+		/* no action to be taken here */
+		break;
+	case RXR_DC_MEDIUM_TAGRTM_PKT:
 		/* no action to be taken here */
 		break;
 	case RXR_DC_EAGER_RTW_PKT:
@@ -616,6 +633,8 @@ void rxr_pkt_handle_recv_completion(struct rxr_ep *ep,
 	case RXR_EAGER_TAGRTM_PKT:
 	case RXR_MEDIUM_MSGRTM_PKT:
 	case RXR_MEDIUM_TAGRTM_PKT:
+	case RXR_DC_MEDIUM_MSGRTM_PKT:
+	case RXR_DC_MEDIUM_TAGRTM_PKT:
 	case RXR_LONG_MSGRTM_PKT:
 	case RXR_LONG_TAGRTM_PKT:
 	case RXR_READ_MSGRTM_PKT:
